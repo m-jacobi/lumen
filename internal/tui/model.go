@@ -44,19 +44,24 @@ type Model struct {
 	list list.Model
 	vp   viewport.Model
 
-	// Glamour rendering + caching
 	renderer     *glamour.TermRenderer
 	renderWrap   int
-	previewCache map[string]string // key: absPath + "|" + wrap -> rendered string
+	previewCache map[string]string
 
-	// UX state
-	focus       string // "list" | "preview"
+	focus       string
 	lastQuery   string
 	lastSelPath string
 
 	width  int
 	height int
 	status string
+
+	debounceID int
+	debounceMS int
+}
+
+type debouncedSearchMsg struct {
+	id int
 }
 
 func NewModel(cfg Config, idx *index.Index) Model {
@@ -84,8 +89,9 @@ func NewModel(cfg Config, idx *index.Index) Model {
 		lastSelPath:  "",
 		renderWrap:   0,
 		renderer:     nil,
+		debounceMS:   80,
 	}
 
-	m.refreshResults() // sets list items + preview (once)
+	m.refreshResults()
 	return m
 }

@@ -2,11 +2,11 @@ package tui
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-
 	"lumen/internal/open"
 	"lumen/internal/search"
+	"os"
+	"path/filepath"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -19,21 +19,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.layout()
-		// On resize, wrap likely changes -> force preview rerender
 		m.lastSelPath = ""
 		m.previewCache = map[string]string{}
 		m.updatePreview()
 		return m, nil
 
+	case debouncedSearchMsg:
+		if msg.id == m.debounceID {
+			m.refreshResults()
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		key := msg.String()
 
-		// Quit
 		if key == "esc" || key == "ctrl+c" || key == "q" {
 			return m, tea.Quit
 		}
 
-		// Toggle focus
 		if key == "ctrl+p" {
 			if m.focus == "list" {
 				m.focus = "preview"
@@ -45,7 +48,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Actions that work anytime (open)
 		switch key {
 		case "enter":
 			it, ok := m.list.SelectedItem().(item)
@@ -69,7 +71,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "tab":
-			// cycle modes: all -> tags -> headings -> content
 			switch m.cfg.Mode {
 			case search.ModeAll:
 				m.cfg.Mode = search.ModeTags
@@ -84,7 +85,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "ctrl+v":
-			// quick vault cycle
 			names := m.cfg.Vaults.Names()
 			cur := 0
 			for i, n := range names {
@@ -112,7 +112,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Scroll preview only if preview focused
 		if m.focus == "preview" {
 			switch key {
 			case "down", "j":
@@ -137,37 +136,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Update query input
 	var cmdIn tea.Cmd
 	m.in, cmdIn = m.in.Update(msg)
 
-	// Only re-search when query actually changed
+	var cmdDebounce tea.Cmd
 	newQ := m.in.Value()
 	if newQ != m.lastQuery {
 		m.lastQuery = newQ
-		m.refreshResults() // includes one preview render for top item
+		m.debounceID++
+		id := m.debounceID
+		delay := time.Duration(m.debounceMS) * time.Millisecond
+
+		cmdDebounce = tea.Tick(delay, func(time.Time) tea.Msg {
+			return debouncedSearchMsg{id: id}
+		})
 	}
 
-	// Update list; selection changes should update preview (but only when selection changed)
 	var cmdList tea.Cmd
 	m.list, cmdList = m.list.Update(msg)
 
-	// Update preview if selection changed
 	it, ok := m.list.SelectedItem().(item)
-	if ok {
-		if it.path != m.lastSelPath {
-			m.lastSelPath = it.path
-			m.updatePreview()
-		}
+	if ok && it.path != m.lastSelPath {
+		m.lastSelPath = it.path
+		m.updatePreview()
 	}
 
-	// Viewport update only needed when preview focused (mouse/scroll events)
 	var cmdVP tea.Cmd
 	if m.focus == "preview" {
 		m.vp, cmdVP = m.vp.Update(msg)
 	}
 
-	return m, tea.Batch(cmdIn, cmdList, cmdVP)
+	return m, tea.Batch(cmdIn, cmdDebounce, cmdList, cmdVP)
 }
 
 func expandHome(p string) string {

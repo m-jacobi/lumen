@@ -11,13 +11,9 @@ var (
 	reYAMLInlineTags = regexp.MustCompile(`(?m)^\s*tags\s*:\s*\[(.*?)\]\s*$`)
 )
 
-// ParseMarkdown extracts title/headings/tags cheaply.
-// Title: first H1, else filenameBase
-// Tags: supports both Obsidian inline "#tag" and YAML frontmatter tags list.
 func ParseMarkdown(s, filenameBase string) (title string, headings []string, tags []string) {
 	title = filenameBase
 
-	// headings
 	matches := reHeading.FindAllStringSubmatch(s, -1)
 	for _, m := range matches {
 		level := len(m[1])
@@ -33,14 +29,12 @@ func ParseMarkdown(s, filenameBase string) (title string, headings []string, tag
 
 	seen := map[string]bool{}
 
-	// 1) YAML frontmatter tags (only if frontmatter is at the top)
 	fm := extractFrontmatter(s)
 	if fm != "" {
 		collectYAMLBlockTags(fm, seen, &tags)
 		collectYAMLInlineTags(fm, seen, &tags)
 	}
 
-	// 2) inline #tags anywhere in the doc
 	for _, t := range reInlineTag.FindAllString(s, -1) {
 		if !seen[t] {
 			seen[t] = true

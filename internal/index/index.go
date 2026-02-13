@@ -18,7 +18,6 @@ type Doc struct {
 	Headings []string
 	Tags     []string
 
-	// for fast contains()
 	ContentLower string
 
 	ModTime time.Time

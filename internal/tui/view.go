@@ -46,8 +46,6 @@ func (m *Model) refreshResults() {
 	}
 	m.list.SetItems(items)
 
-	// After a new search, render preview once for the current selection.
-	// Reset lastSelPath to force update.
 	m.lastSelPath = ""
 	m.updatePreview()
 }
@@ -61,9 +59,8 @@ func (m *Model) ensureRenderer() {
 		return
 	}
 
-	// Important: avoid AutoStyle (can trigger OSC queries on some terminals)
 	r, _ := glamour.NewTermRenderer(
-		glamour.WithStylePath("dark"), // change to "light" if your terminal is light
+		glamour.WithStylePath("tokyo-night"), // change to light or dark
 		glamour.WithWordWrap(wrap),
 	)
 	m.renderer = r
@@ -96,7 +93,6 @@ func (m *Model) updatePreview() {
 
 	out, rerr := m.renderer.Render(md)
 	if rerr != nil {
-		// fallback raw
 		m.vp.SetContent(md)
 		return
 	}
@@ -155,7 +151,6 @@ func max(a, b int) int {
 	return b
 }
 
-// helper for vault switching without import cycles
 func indexBuild(root string) (*index.Index, error) {
 	return index.Build(root)
 }
