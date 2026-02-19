@@ -23,76 +23,89 @@ var (
 	flagEditor  string
 )
 
+func run(cmd *cobra.Command, args []string) error {
+	vaults := vault.DefaultVaults()
+
+	vname, remainingArgs := resolveVaultName(vaults, args)
+	vpath, err := resolveVaultPath(vaults, vname)
+	if err != nil {
+		return err
+	}
+
+	idx, err := index.Build(vpath)
+	if err != nil {
+		return err
+	}
+
+	cfg := tui.Config{
+		VaultName:  vname,
+		VaultPath:  vpath,
+		Vaults:     vaults,
+		Mode:       getSearchMode(),
+		Rank:       flagRank,
+		EditorCmd:  getEditor(),
+		InitialQ:   strings.Join(remainingArgs, " "),
+		ShowHidden: false,
+	}
+
+	m := tui.NewModel(cfg, idx)
+	p := tea.NewProgram(m, tea.WithAltScreen())
+	_, err = p.Run()
+	return err
+}
+
+func resolveVaultName(vaults vault.Vaults, args []string) (string, []string) {
+	if vname := strings.TrimSpace(flagVault); vname != "" {
+		return vname, args
+	}
+
+	if len(args) > 0 && vaults.Has(args[0]) {
+		return args[0], args[1:]
+	}
+
+	return "develop", args
+}
+
+func resolveVaultPath(vaults vault.Vaults, vname string) (string, error) {
+	vpath, ok := vaults.Path(vname)
+	if !ok {
+		return "", fmt.Errorf("unknown vault: %s (known: %s)", vname, strings.Join(vaults.Names(), ", "))
+	}
+	return expandHome(vpath), nil
+}
+
+func getSearchMode() search.Mode {
+	switch {
+	case flagTags:
+		return search.ModeTags
+	case flagHeads:
+		return search.ModeHeadings
+	case flagContent:
+		return search.ModeContent
+	default:
+		return search.ModeAll
+	}
+}
+
+func getEditor() string {
+	if flagEditor != "" {
+		return flagEditor
+	}
+	if editor := os.Getenv("EDITOR"); editor != "" {
+		return editor
+	}
+	return "nvim"
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "lumen [vault?] [query...]",
 	Short: "Search and open Obsidian notes in a TUI (Cobra + Bubble Tea)",
 	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		vaults := vault.DefaultVaults()
-
-		vname := strings.TrimSpace(flagVault)
-
-		if vname == "" {
-			if len(args) > 0 && vaults.Has(args[0]) {
-				vname = args[0]
-				args = args[1:]
-			} else {
-				vname = "develop"
-			}
-		}
-
-		vpath, ok := vaults.Path(vname)
-
-		if !ok {
-			return fmt.Errorf("unknown vault: %s (known: %s)", vname, strings.Join(vaults.Names(), ", "))
-		}
-		vpath = expandHome(vpath)
-
-		mode := search.ModeAll
-		if flagTags {
-			mode = search.ModeTags
-		} else if flagHeads {
-			mode = search.ModeHeadings
-		} else if flagContent {
-			mode = search.ModeContent
-		}
-
-		editor := flagEditor
-		if editor == "" {
-			editor = os.Getenv("EDITOR")
-		}
-		if editor == "" {
-			editor = "nvim"
-		}
-
-		q := strings.Join(args, " ")
-
-		idx, err := index.Build(vpath)
-		if err != nil {
-			return err
-		}
-
-		cfg := tui.Config{
-			VaultName:  vname,
-			VaultPath:  vpath,
-			Vaults:     vaults,
-			Mode:       mode,
-			Rank:       flagRank,
-			EditorCmd:  editor,
-			InitialQ:   q,
-			ShowHidden: false,
-		}
-
-		m := tui.NewModel(cfg, idx)
-		p := tea.NewProgram(m, tea.WithAltScreen())
-		_, err = p.Run()
-		return err
-	},
+	RunE:  run,
 }
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }

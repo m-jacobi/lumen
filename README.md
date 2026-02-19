@@ -51,8 +51,9 @@ lumen private taxes
 
 ### Search Modes
 
-| -t | Tags only        |
+| Command | Description |
 |----|------------------|
+| -t | Tags only        |
 | -H | Titles & heading |
 | -c | Content only     |
 | -r | Enable ranking   |

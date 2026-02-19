@@ -3,32 +3,43 @@ package vault
 import "sort"
 
 type Vaults struct {
-	m map[string]string
+	vaults map[string]string
 }
 
 func DefaultVaults() Vaults {
-	return Vaults{m: map[string]string{
+	return New(map[string]string{
 		"develop": "~/Documents/Obsidian/develop",
 		"work":    "~/Documents/Obsidian/work",
 		"private": "~/Documents/Obsidian/private",
-	}}
+	})
+}
+
+func New(vaults map[string]string) Vaults {
+	if vaults == nil {
+		vaults = make(map[string]string)
+	}
+	return Vaults{vaults: vaults}
+}
+
+func NewVaults(vaults map[string]string) Vaults {
+	return New(vaults)
 }
 
 func (v Vaults) Has(name string) bool {
-	_, ok := v.m[name]
+	_, ok := v.vaults[name]
 	return ok
 }
 
 func (v Vaults) Path(name string) (string, bool) {
-	p, ok := v.m[name]
-	return p, ok
+	path, ok := v.vaults[name]
+	return path, ok
 }
 
 func (v Vaults) Names() []string {
-	out := make([]string, 0, len(v.m))
-	for k := range v.m {
-		out = append(out, k)
+	names := make([]string, 0, len(v.vaults))
+	for name := range v.vaults {
+		names = append(names, name)
 	}
-	sort.Strings(out)
-	return out
+	sort.Strings(names)
+	return names
 }
