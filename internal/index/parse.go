@@ -12,10 +12,16 @@ var (
 )
 
 func ParseMarkdown(s, filenameBase string) (title string, headings []string, tags []string) {
-	title = filenameBase
+	title, headings = extractHeadings(s, filenameBase)
+	tags = collectTags(s)
+	return title, headings, tags
+}
 
-	matches := reHeading.FindAllStringSubmatch(s, -1)
-	for _, m := range matches {
+func extractHeadings(s, filenameBase string) (string, []string) {
+	title := filenameBase
+	var headings []string
+
+	for _, m := range reHeading.FindAllStringSubmatch(s, -1) {
 		level := len(m[1])
 		text := strings.TrimSpace(m[2])
 		if text == "" {
@@ -27,22 +33,19 @@ func ParseMarkdown(s, filenameBase string) (title string, headings []string, tag
 		}
 	}
 
+	return title, headings
+}
+
+func collectTags(s string) []string {
 	seen := map[string]bool{}
+	var tags []string
 
-	fm := extractFrontmatter(s)
-	if fm != "" {
-		collectYAMLBlockTags(fm, seen, &tags)
-		collectYAMLInlineTags(fm, seen, &tags)
+	if fm := extractFrontmatter(s); fm != "" {
+		collectYAMLTags(fm, seen, &tags)
 	}
+	collectInlineTags(s, seen, &tags)
 
-	for _, t := range reInlineTag.FindAllString(s, -1) {
-		if !seen[t] {
-			seen[t] = true
-			tags = append(tags, t)
-		}
-	}
-
-	return
+	return tags
 }
 
 func extractFrontmatter(s string) string {
@@ -61,7 +64,7 @@ func extractFrontmatter(s string) string {
 	return ""
 }
 
-func collectYAMLBlockTags(fm string, seen map[string]bool, out *[]string) {
+func collectYAMLTags(fm string, seen map[string]bool, out *[]string) {
 	lines := strings.Split(fm, "\n")
 	inTags := false
 
@@ -73,6 +76,13 @@ func collectYAMLBlockTags(fm string, seen map[string]bool, out *[]string) {
 			if strings.HasPrefix(strings.ToLower(trim), "tags:") {
 				inTags = true
 			}
+			collectInlineYAMLTags(trim, seen, out)
+			continue
+		}
+
+		if strings.HasPrefix(strings.ToLower(trim), "tags:") {
+			collectInlineYAMLTags(trim, seen, out)
+			inTags = false
 			continue
 		}
 
@@ -82,11 +92,7 @@ func collectYAMLBlockTags(fm string, seen map[string]bool, out *[]string) {
 			if val == "" {
 				continue
 			}
-			tag := "#" + val
-			if !seen[tag] {
-				seen[tag] = true
-				*out = append(*out, tag)
-			}
+			addTag("#"+val, seen, out)
 			continue
 		}
 
@@ -96,22 +102,32 @@ func collectYAMLBlockTags(fm string, seen map[string]bool, out *[]string) {
 	}
 }
 
-func collectYAMLInlineTags(fm string, seen map[string]bool, out *[]string) {
-	m := reYAMLInlineTags.FindAllStringSubmatch(fm, -1)
-	for _, mm := range m {
+func collectInlineYAMLTags(line string, seen map[string]bool, out *[]string) {
+	for _, mm := range reYAMLInlineTags.FindAllStringSubmatch(line, -1) {
 		inner := mm[1]
-		parts := strings.Split(inner, ",")
-		for _, p := range parts {
+		for _, p := range strings.Split(inner, ",") {
 			val := strings.TrimSpace(p)
 			val = strings.Trim(val, `"'`)
 			if val == "" {
 				continue
 			}
-			tag := "#" + val
-			if !seen[tag] {
-				seen[tag] = true
-				*out = append(*out, tag)
-			}
+			addTag("#"+val, seen, out)
 		}
+	}
+}
+
+func collectInlineTags(s string, seen map[string]bool, out *[]string) {
+	for _, t := range reInlineTag.FindAllString(s, -1) {
+		addTag(t, seen, out)
+	}
+}
+
+func addTag(tag string, seen map[string]bool, out *[]string) {
+	if tag == "" {
+		return
+	}
+	if !seen[tag] {
+		seen[tag] = true
+		*out = append(*out, tag)
 	}
 }
