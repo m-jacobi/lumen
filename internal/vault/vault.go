@@ -8,9 +8,9 @@ type Vaults struct {
 
 func DefaultVaults() Vaults {
 	return New(map[string]string{
-		"develop": "~/Documents/Obsidian/develop",
-		"work":    "~/Documents/Obsidian/work",
-		"private": "~/Documents/Obsidian/private",
+		"develop": "~/Obsidian/develop",
+		"work":    "~/Obsidian/work",
+		"private": "~/Obsidian/private",
 	})
 }
 
